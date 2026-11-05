@@ -29,7 +29,9 @@ internal sealed class ProtobufExtension : Extension
             // Built for .NET 10, which needs the .NET 10 extension host that ships with Visual Studio 2026.
             // The value must be the "netX.Y" form; VS 2026 ignores extensions declaring "10.0".
             DotnetTargetVersions = [DotnetTarget.Custom("net10.0")],
-            InstallationTargetVersion = "[18.0,)",
+            // The Marketplace rejects an 18.0 lower bound ("experimental API version"; VsixPub0029), so declare
+            // 17.14. In practice the extension only runs on VS 2026, because VS 2022 has no .NET 10 host.
+            InstallationTargetVersion = "[17.14,)",
         },
     };
 

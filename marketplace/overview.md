@@ -21,7 +21,8 @@ Change Rules, Restart Language Server, and Install or Update Buf CLI.
 
 ## Requirements
 
-- Visual Studio 2026 (18.0 or later).
+- **Visual Studio 2026** (18.0 or later). The extension runs on .NET 10, which Visual Studio 2022 cannot
+  host, so it installs on VS 2022 but does not load there.
 - The [Buf CLI](https://buf.build/docs/cli/installation/) 1.43 or later. If it isn't on `PATH`, the
   extension downloads the latest release from GitHub and verifies its checksum. Configure this under
   Tools > Options > Buf.
