@@ -81,6 +81,13 @@ devenv /rootsuffix Exp samples\weather
 The first time after a command-line deploy, the experimental instance lists the extension as "Disabled by
 user". Enable it in Extensions > Manage Extensions and restart the experimental instance.
 
+If the extension isn't listed at all, the experimental instance's extension cache is stale. Close the
+experimental instance, delete `ExtensionMetadata2.0.mpack` and `ExtensionMetadataCache.mpack` from
+`%LOCALAPPDATA%\Microsoft\VisualStudio\18.0_<instance>Exp\Extensions`, run
+`devenv /rootsuffix Exp /updateconfiguration`, and start it again.
+
+The language server starts when the first `.proto` file is opened, not when a folder or solution is opened.
+
 `samples\weather` is a small Buf v2 workspace: two packages, a cross-file import, a well-known type import,
 and one deliberate lint violation (`windSpeedKph`, FIELD_LOWER_SNAKE_CASE).
 
