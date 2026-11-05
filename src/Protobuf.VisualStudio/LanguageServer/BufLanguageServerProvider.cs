@@ -20,12 +20,19 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
 {
     private readonly BufService service;
     private readonly object processGate = new();
+    private readonly RestartPolicy policy = new();
     private Process? process;
+    private IDisposable? settingsSubscription;
 
     public BufLanguageServerProvider(BufService service)
     {
         this.service = service;
-        this.service.RestartRequested += (_, _) => _ = this.RestartAsync();
+        this.service.RestartRequested += (_, _) =>
+        {
+            // A restart the user asked for also forgives earlier crashes.
+            this.policy.Reset();
+            _ = this.RestartAsync("requested");
+        };
     }
 
     /// <summary>Protocol Buffers source files.</summary>
@@ -55,6 +62,8 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         }
 
         var settings = await BufSettings.ReadAsync(this.Extensibility, cancellationToken).ConfigureAwait(false);
+        this.policy.SettingsChanged(new ServerLaunchSettings(settings.BufPath, settings.DebugLogs));
+        await this.EnsureSettingsSubscriptionAsync(cancellationToken).ConfigureAwait(false);
         var arguments = buf.LanguageServerArguments(settings.DebugLogs);
         var workingDirectory = await this.service.GetSolutionDirectoryAsync(cancellationToken).ConfigureAwait(false);
 
@@ -71,8 +80,11 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
             this.process = started;
         }
 
+        this.policy.ServerStarted();
+
         await this.service.LogAsync($"Started Buf {buf.Version} language server: {BufCli.FormatCommandLine(arguments)} (pid {started.Id}, {buf.Path})").ConfigureAwait(false);
-        started.Exited += (_, _) => this.service.Log($"Buf language server (pid {started.Id}) exited with code {SafeExitCode(started)}.");
+        var pid = started.Id;
+        started.Exited += (_, _) => _ = this.OnServerExitedAsync(pid, SafeExitCode(started));
         _ = this.PumpStandardErrorAsync(started);
 
         return new DuplexPipe(
@@ -101,10 +113,24 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
     {
         if (disposing)
         {
+            this.policy.ExpectExit();
+            this.settingsSubscription?.Dispose();
             this.KillProcess();
         }
 
         base.Dispose(disposing);
+    }
+
+    private static int SafeId(Process process)
+    {
+        try
+        {
+            return process.Id;
+        }
+        catch (InvalidOperationException)
+        {
+            return -1;
+        }
     }
 
     private static string SafeExitCode(Process process)
@@ -119,13 +145,14 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         }
     }
 
-    private async Task RestartAsync()
+    private async Task RestartAsync(string reason)
     {
         try
         {
-            await this.service.LogAsync("Restarting the Buf language server.").ConfigureAwait(false);
+            await this.service.LogAsync($"Restarting the Buf language server ({reason}).").ConfigureAwait(false);
 
             // Tell Visual Studio to drop the client, end the process, then let it activate again.
+            this.policy.ExpectExit();
             this.Enabled = false;
             this.KillProcess();
             await Task.Delay(500, this.service.ShutdownToken).ConfigureAwait(false);
@@ -134,6 +161,57 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         catch (Exception ex)
         {
             await this.service.LogAsync($"Language server restart failed: {ex.Message}").ConfigureAwait(false);
+        }
+    }
+
+    private async Task OnServerExitedAsync(int pid, string exitCode)
+    {
+        await this.service.LogAsync($"Buf language server (pid {pid}) exited with code {exitCode}.").ConfigureAwait(false);
+
+        bool isCurrent;
+        lock (this.processGate)
+        {
+            // KillProcess clears the field before killing, so a process we stopped (or one already replaced by a
+            // newer server) is never the current one, and its exit can't be mistaken for a crash of the new one.
+            isCurrent = this.process is { } current && SafeId(current) == pid;
+        }
+
+        // Exit code 0 means Visual Studio shut the server down (shutdown/exit), which is not a crash either.
+        var decision = !isCurrent || exitCode == "0" ? RestartDecision.Intentional : this.policy.ServerExited();
+        switch (decision)
+        {
+            case RestartDecision.Restart:
+                await this.RestartAsync("it exited unexpectedly").ConfigureAwait(false);
+                break;
+            case RestartDecision.GiveUp:
+                await this.service.LogAsync($"The Buf language server crashed {RestartPolicy.MaxCrashRestarts} times in {RestartPolicy.CrashWindow.TotalMinutes:0} minutes, so it was left stopped. Turn on Tools > Options > Buf > Language server debug logging and use Tools > Buf > Restart Language Server.").ConfigureAwait(false);
+                break;
+        }
+    }
+
+    /// <summary>Restarts the server when the CLI path or debug logging setting changes.</summary>
+    private async Task EnsureSettingsSubscriptionAsync(CancellationToken cancellationToken)
+    {
+        if (this.settingsSubscription is not null)
+        {
+            return;
+        }
+
+        var subscription = await this.Extensibility.Settings().SubscribeAsync(
+            [BufSettings.BufPath, BufSettings.DebugLogs],
+            cancellationToken,
+            values =>
+            {
+                var current = new ServerLaunchSettings(values.ValueOrDefault(BufSettings.BufPath, string.Empty).Trim(), values.ValueOrDefault(BufSettings.DebugLogs, false));
+                if (this.policy.SettingsChanged(current))
+                {
+                    _ = this.RestartAsync("Buf settings changed");
+                }
+            }).ConfigureAwait(false);
+
+        if (Interlocked.CompareExchange(ref this.settingsSubscription, subscription, null) is not null)
+        {
+            subscription.Dispose();
         }
     }
 
