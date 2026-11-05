@@ -21,9 +21,21 @@ internal static class RealBuf
     private static async Task<BufBinary> ResolveAsync()
     {
         var configured = Environment.GetEnvironmentVariable("BUF_PATH");
-        var path = !string.IsNullOrWhiteSpace(configured)
-            ? configured
-            : await BufInstaller.InstallAsync(CacheRoot, _ => { }, progress: null, CancellationToken.None).ConfigureAwait(false);
+        string path;
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            path = await BufInstaller.InstallAsync(CacheRoot, _ => { }, progress: null, CancellationToken.None).ConfigureAwait(false);
+        }
+        else if (Path.IsPathRooted(configured))
+        {
+            path = configured;
+        }
+        else
+        {
+            // bufbuild/buf-action reports a bare "buf.exe" that is on PATH; resolve it the way the extension does.
+            path = BufCli.Locate(null, baseDirectory: null, Environment.GetEnvironmentVariable("PATH"), installRoot: CacheRoot)
+                ?? throw new InvalidOperationException($"BUF_PATH is '{configured}', but no buf.exe is on PATH.");
+        }
 
         return await BufCli.ResolveAsync(path, baseDirectory: null, CancellationToken.None).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"'{path}' is not a working buf.exe.");
