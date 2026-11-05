@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json.schemastore.org/vsix-publish",
+  "categories": [ "coding", "programming languages" ],
+  "identity": {
+    "internalName": "protobuf-language-support"
+  },
+  "overview": "overview.md",
+  "priceCategory": "free",
+  "publisher": "set-by-the-VS_MARKETPLACE_PUBLISHER-variable",
+  "private": false,
+  "qna": true
+}

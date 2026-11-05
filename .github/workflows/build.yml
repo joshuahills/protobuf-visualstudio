@@ -1,0 +1,119 @@
+name: Build
+
+# Every push and pull request builds the VSIX and keeps it as a workflow artifact.
+# Pushing a tag like v0.2.0 also:
+#   - stamps that version into the VSIX,
+#   - creates a GitHub release with the VSIX attached,
+#   - publishes to the Visual Studio Marketplace when the VS_MARKETPLACE_PAT secret and the
+#     VS_MARKETPLACE_PUBLISHER variable are set (skipped otherwise).
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Work out the version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          } else {
+            # Untagged builds: version from the csproj with the run number as the fourth part,
+            # so CI builds install over each other in order.
+            [xml]$proj = Get-Content src/Protobuf.VisualStudio/Protobuf.VisualStudio.csproj
+            $base = ($proj.Project.PropertyGroup | Where-Object Version | Select-Object -First 1).Version
+            $version = "$base.$env:GITHUB_RUN_NUMBER"
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw "Version '$version' must be numeric (e.g. tag v1.2.3)." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "Building version $version"
+
+      - name: Build
+        run: dotnet build src/Protobuf.VisualStudio/Protobuf.VisualStudio.csproj -c Release -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Rename VSIX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src/Protobuf.VisualStudio/bin/Release/net10.0-windows/Protobuf.VisualStudio.vsix "out/Protobuf.VisualStudio-${{ steps.version.outputs.version }}.vsix"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: out/*.vsix
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: out
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/*.vsix \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
+  marketplace:
+    if: github.ref_type == 'tag' && vars.VS_MARKETPLACE_PUBLISHER != ''
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: out
+
+      - name: Publish to the Visual Studio Marketplace
+        shell: pwsh
+        env:
+          PAT: ${{ secrets.VS_MARKETPLACE_PAT }}
+          PUBLISHER: ${{ vars.VS_MARKETPLACE_PUBLISHER }}
+        run: |
+          if (-not $env:PAT) { throw 'Set the VS_MARKETPLACE_PAT repository secret.' }
+
+          # VsixPublisher.exe ships in the Microsoft.VSSDK.BuildTools package.
+          nuget install Microsoft.VSSDK.BuildTools -OutputDirectory tools -NonInteractive | Out-Null
+          $publisher = Get-ChildItem tools -Recurse -Filter VsixPublisher.exe | Select-Object -First 1
+          if (-not $publisher) { throw 'VsixPublisher.exe not found in Microsoft.VSSDK.BuildTools.' }
+
+          $manifest = Get-Content marketplace/publishManifest.json -Raw | ConvertFrom-Json
+          $manifest.publisher = $env:PUBLISHER
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content marketplace/publishManifest.generated.json
+
+          $vsix = Get-ChildItem out -Filter *.vsix | Select-Object -First 1
+          & $publisher.FullName publish `
+            -payload $vsix.FullName `
+            -publishManifest marketplace/publishManifest.generated.json `
+            -personalAccessToken $env:PAT
+          if ($LASTEXITCODE -ne 0) { throw "VsixPublisher failed with exit code $LASTEXITCODE" }

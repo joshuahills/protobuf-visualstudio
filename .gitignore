@@ -6,3 +6,6 @@ obj/
 *.swp
 TestResults/
 *.vsix
+marketplace/publishManifest.generated.json
+out/
+tools/

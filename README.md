@@ -106,3 +106,22 @@ src/Protobuf.VisualStudio/
 docs/                                       Feature analysis against vscode-buf
 samples/weather/                            Buf workspace for manual testing
 ```
+
+## Releases
+
+Every push to `main` and every pull request builds the VSIX in GitHub Actions
+([`.github/workflows/build.yml`](.github/workflows/build.yml)) and keeps it as a workflow artifact. Untagged
+builds are versioned `<csproj version>.<run number>`.
+
+To release, bump `<Version>` in the csproj if you like, then push a tag:
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The tag's version is stamped into the VSIX, and a GitHub release is created with
+`Protobuf.VisualStudio-0.2.0.vsix` attached. If the repository has a `VS_MARKETPLACE_PUBLISHER` variable and
+a `VS_MARKETPLACE_PAT` secret, the same VSIX is also published to the Visual Studio Marketplace using
+[`marketplace/publishManifest.json`](marketplace/publishManifest.json) and
+[`marketplace/overview.md`](marketplace/overview.md).
