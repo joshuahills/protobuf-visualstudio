@@ -154,6 +154,18 @@ internal sealed class BufService : IDisposable
         this.RunCoreAsync(title, perWorkspace, (_, _) => Task.FromResult<IReadOnlyList<string>?>(arguments), check: null);
 
     /// <summary>
+    /// Runs buf for one file or folder: in the Buf workspace that contains it, with the command line built from the
+    /// path relative to that workspace. For a check, only that path's Error List results are replaced.
+    /// </summary>
+    public Task RunOnPathAsync(string title, string path, Func<string, string, IReadOnlyList<string>> argumentsForRelativePath, BufCheckKind? kind = null)
+    {
+        Func<string, CancellationToken, Task<IReadOnlyList<string>?>> argumentsFor =
+            (root, _) => Task.FromResult<IReadOnlyList<string>?>(argumentsForRelativePath(root, WorkspaceRoots.RelativeArgument(root, path)));
+        var check = kind is { } k ? new BufCheck(k, title, argumentsFor) : null;
+        return this.RunCoreAsync(title, perWorkspace: true, argumentsFor, check, workspaceFor: path);
+    }
+
+    /// <summary>
     /// Runs a check (build, lint, breaking) in each Buf workspace and replaces that check's Error List results with
     /// what it found. Findings are also written to the Buf pane as clickable lines.
     /// </summary>
@@ -166,7 +178,7 @@ internal sealed class BufService : IDisposable
         await this.LogAsync("Cleared Buf results from the Error List.").ConfigureAwait(false);
     }
 
-    private async Task RunCoreAsync(string title, bool perWorkspace, Func<string, CancellationToken, Task<IReadOnlyList<string>?>> argumentsFor, BufCheck? check)
+    private async Task RunCoreAsync(string title, bool perWorkspace, Func<string, CancellationToken, Task<IReadOnlyList<string>?>> argumentsFor, BufCheck? check, string? workspaceFor = null)
     {
         if (!await this.commandGate.WaitAsync(0, this.shutdownToken).ConfigureAwait(false))
         {
@@ -195,7 +207,9 @@ internal sealed class BufService : IDisposable
                 await this.EnsureSaveTrackingAsync().ConfigureAwait(false);
             }
 
-            var roots = perWorkspace ? WorkspaceRoots.Find(solutionDirectory) : [solutionDirectory];
+            IReadOnlyList<string> roots = workspaceFor is not null
+                ? [WorkspaceRoots.ForPath(workspaceFor, solutionDirectory)]
+                : perWorkspace ? WorkspaceRoots.Find(solutionDirectory) : [solutionDirectory];
             using var progress = await this.extensibility.Shell()
                 .StartProgressReportingAsync($"Buf: {title}", new ProgressReporterOptions(isWorkCancellable: true), this.shutdownToken)
                 .ConfigureAwait(false);
@@ -244,7 +258,7 @@ internal sealed class BufService : IDisposable
 
             if (check is not null)
             {
-                await this.Diagnostics.PublishAsync(check.Kind, findings, this.shutdownToken).ConfigureAwait(false);
+                await this.Diagnostics.PublishAsync(check.Kind, findings, this.shutdownToken, scope: workspaceFor).ConfigureAwait(false);
             }
 
             var summary = (failures, check) switch

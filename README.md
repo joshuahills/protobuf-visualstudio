@@ -56,6 +56,10 @@ under the solution:
 - List Lint Rules, List Breaking Change Rules.
 - Restart Language Server, Install or Update Buf CLI.
 
+In **Solution Explorer**, right-click a `.proto` file for **Lint with Buf** and **Format with Buf**, or a folder
+or project for **Lint Protos with Buf**. These run in the Buf workspace that contains the item and only replace
+that item's Error List entries. (Solution view only for now; Open Folder view has its own menus, see #20.)
+
 Output from all of these goes to **View > Output > Buf**. Findings are also written there as
 `path(line,col): error RULE: message`, which can be double-clicked to jump to the problem.
 

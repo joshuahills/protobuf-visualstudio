@@ -20,10 +20,14 @@ internal sealed class BufDiagnosticsPublisher(VisualStudioExtensibility extensib
     private readonly Dictionary<BufCheckKind, DiagnosticsReporter> reporters = [];
     private readonly Dictionary<BufCheckKind, HashSet<string>> files = [];
 
-    /// <summary>Replaces the results of <paramref name="kind"/> with <paramref name="annotations"/>.</summary>
-    public async Task PublishAsync(BufCheckKind kind, IReadOnlyCollection<BufAnnotation> annotations, CancellationToken cancellationToken)
+    /// <summary>
+    /// Replaces the results of <paramref name="kind"/> with <paramref name="annotations"/>. With a
+    /// <paramref name="scope"/> (a file or folder), only earlier results inside it are replaced, so linting one file
+    /// keeps the rest of a workspace-wide run.
+    /// </summary>
+    public async Task PublishAsync(BufCheckKind kind, IReadOnlyCollection<BufAnnotation> annotations, CancellationToken cancellationToken, string? scope = null)
     {
-        await this.ClearKindAsync(kind, cancellationToken).ConfigureAwait(false);
+        await this.ClearKindAsync(kind, cancellationToken, scope).ConfigureAwait(false);
         if (annotations.Count == 0)
         {
             return;
@@ -85,14 +89,14 @@ internal sealed class BufDiagnosticsPublisher(VisualStudioExtensibility extensib
         }
     }
 
-    private async Task ClearKindAsync(BufCheckKind kind, CancellationToken cancellationToken)
+    private async Task ClearKindAsync(BufCheckKind kind, CancellationToken cancellationToken, string? scope = null)
     {
         string[] previous;
         lock (this.gate)
         {
             var set = this.TrackedFiles(kind);
-            previous = [.. set];
-            set.Clear();
+            previous = scope is null ? [.. set] : [.. set.Where(path => WorkspaceRoots.IsUnder(path, scope))];
+            set.ExceptWith(previous);
         }
 
         foreach (var path in previous)
