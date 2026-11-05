@@ -39,13 +39,17 @@ In `.proto` files, provided by the Buf Language Server:
 From the **Tools > Buf** menu, each running in every Buf workspace (folder with `buf.yaml` or `buf.work.yaml`)
 under the solution:
 
-- Build, Lint, Format All Proto Files, Generate.
+- Build and Lint, with every finding listed in the **Error List**, including files that aren't open. Results are
+  grouped by provider ("Buf Build", "Buf Lint"). A new run replaces the previous one, and a file's entries are
+  dropped when you save it (the language server's live diagnostics take over). Clear Error List Results removes
+  them all.
+- Format All Proto Files, Generate.
 - Update Dependencies, Prune Dependencies, Initialize buf.yaml.
 - List Lint Rules, List Breaking Change Rules.
 - Restart Language Server, Install or Update Buf CLI.
 
-Output from all of these goes to **View > Output > Buf**. Lines in `--error-format msvs` form can be
-double-clicked to jump to the problem.
+Output from all of these goes to **View > Output > Buf**. Findings are also written there as
+`path(line,col): error RULE: message`, which can be double-clicked to jump to the problem.
 
 [ROADMAP.md](ROADMAP.md) lists planned work. [docs/buf-vscode-feature-analysis.md](docs/buf-vscode-feature-analysis.md)
 compares the extension feature by feature with vscode-buf.

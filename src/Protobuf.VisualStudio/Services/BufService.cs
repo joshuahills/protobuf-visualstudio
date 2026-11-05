@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Documents;
+using Microsoft.VisualStudio.Extensibility.Languages;
+using Microsoft.VisualStudio.RpcContracts.Documents;
 using Microsoft.VisualStudio.Extensibility.Shell;
 using Microsoft.VisualStudio.RpcContracts.OutputChannel;
 using Microsoft.VisualStudio.RpcContracts.ProgressReporting;
@@ -22,6 +24,8 @@ internal sealed class BufService : IDisposable
     private readonly SemaphoreSlim commandGate = new(1, 1);
     private OutputChannel? output;
     private bool installDeclined;
+    private BufDiagnosticsPublisher? diagnostics;
+    private IDisposable? documentSubscription;
 
     public BufService(VisualStudioExtensibility extensibility, TraceSource? trace, CancellationToken shutdownToken)
     {
@@ -34,6 +38,8 @@ internal sealed class BufService : IDisposable
     public event EventHandler? RestartRequested;
 
     public CancellationToken ShutdownToken => this.shutdownToken;
+
+    private BufDiagnosticsPublisher Diagnostics => this.diagnostics ??= new BufDiagnosticsPublisher(this.extensibility);
 
     public VisualStudioExtensibility Extensibility => this.extensibility;
 
@@ -144,7 +150,23 @@ internal sealed class BufService : IDisposable
     /// </summary>
     /// <param name="title">Shown in the progress indicator and the log.</param>
     /// <param name="perWorkspace">False to run once in the solution folder instead of once per workspace.</param>
-    public async Task RunInWorkspacesAsync(string title, IReadOnlyList<string> arguments, bool perWorkspace = true)
+    public Task RunInWorkspacesAsync(string title, IReadOnlyList<string> arguments, bool perWorkspace = true) =>
+        this.RunCoreAsync(title, perWorkspace, (_, _) => Task.FromResult<IReadOnlyList<string>?>(arguments), check: null);
+
+    /// <summary>
+    /// Runs a check (build, lint, breaking) in each Buf workspace and replaces that check's Error List results with
+    /// what it found. Findings are also written to the Buf pane as clickable lines.
+    /// </summary>
+    public Task RunCheckAsync(BufCheck check) => this.RunCoreAsync(check.Title, perWorkspace: true, check.Arguments, check);
+
+    /// <summary>Removes every Tools &gt; Buf result from the Error List.</summary>
+    public async Task ClearResultsAsync()
+    {
+        await this.Diagnostics.ClearAllAsync(this.shutdownToken).ConfigureAwait(false);
+        await this.LogAsync("Cleared Buf results from the Error List.").ConfigureAwait(false);
+    }
+
+    private async Task RunCoreAsync(string title, bool perWorkspace, Func<string, CancellationToken, Task<IReadOnlyList<string>?>> argumentsFor, BufCheck? check)
     {
         if (!await this.commandGate.WaitAsync(0, this.shutdownToken).ConfigureAwait(false))
         {
@@ -168,30 +190,70 @@ internal sealed class BufService : IDisposable
                 return;
             }
 
+            if (check is not null)
+            {
+                await this.EnsureSaveTrackingAsync().ConfigureAwait(false);
+            }
+
             var roots = perWorkspace ? WorkspaceRoots.Find(solutionDirectory) : [solutionDirectory];
             using var progress = await this.extensibility.Shell()
                 .StartProgressReportingAsync($"Buf: {title}", new ProgressReporterOptions(isWorkCancellable: true), this.shutdownToken)
                 .ConfigureAwait(false);
 
             var failures = 0;
+            List<BufAnnotation> findings = [];
             foreach (var root in roots)
             {
+                var arguments = await argumentsFor(root, progress.CancellationToken).ConfigureAwait(false);
+                if (arguments is null)
+                {
+                    failures++;
+                    continue;
+                }
+
                 progress.Report(new ProgressStatus(null, $"{BufCli.FormatCommandLine(arguments)} in {root}"));
                 await this.LogAsync($"> {BufCli.FormatCommandLine(arguments)}   (in {root})").ConfigureAwait(false);
                 var stopwatch = Stopwatch.StartNew();
                 var result = await BufCli.RunAsync(buf.Path, arguments, root, progress.CancellationToken).ConfigureAwait(false);
-                await this.LogBlockAsync(result.StandardOutput).ConfigureAwait(false);
-                await this.LogBlockAsync(result.StandardError).ConfigureAwait(false);
+
+                if (check is null)
+                {
+                    await this.LogBlockAsync(result.StandardOutput).ConfigureAwait(false);
+                    await this.LogBlockAsync(result.StandardError).ConfigureAwait(false);
+                }
+                else
+                {
+                    var annotations = BufAnnotation.ParseOutput(result, root);
+                    findings.AddRange(annotations);
+                    foreach (var annotation in annotations)
+                    {
+                        var severity = BufDiagnosticMapper.Severity(annotation, check.Kind) == BufSeverity.Error ? "error" : "warning";
+                        await this.WriteAsync(annotation.ToMsBuildLine(severity)).ConfigureAwait(false);
+                    }
+
+                    await this.LogBlockAsync(BufAnnotation.NonJsonLines(result.StandardError)).ConfigureAwait(false);
+                }
+
                 await this.LogAsync($"Exit code {result.ExitCode} after {stopwatch.Elapsed.TotalSeconds:F1}s.").ConfigureAwait(false);
-                if (result.ExitCode != 0)
+                var ranCleanly = result.ExitCode == 0 || (check is not null && result.ExitCode == BufCheck.FindingsExitCode);
+                if (!ranCleanly)
                 {
                     failures++;
                 }
             }
 
-            var summary = failures == 0
-                ? $"{title}: finished in {roots.Count} workspace(s)."
-                : $"{title}: {failures} of {roots.Count} workspace(s) reported problems. See the Buf output pane.";
+            if (check is not null)
+            {
+                await this.Diagnostics.PublishAsync(check.Kind, findings, this.shutdownToken).ConfigureAwait(false);
+            }
+
+            var summary = (failures, check) switch
+            {
+                (0, null) => $"{title}: finished in {roots.Count} workspace(s).",
+                (0, _) when findings.Count == 0 => $"{title}: no problems in {roots.Count} workspace(s).",
+                (0, _) => $"{title}: {findings.Count} problem(s) in {roots.Count} workspace(s); see the Error List.",
+                _ => $"{title}: buf failed in {failures} of {roots.Count} workspace(s). See the Buf output pane.",
+            };
             await this.LogAsync(summary).ConfigureAwait(false);
             if (failures > 0)
             {
@@ -212,6 +274,66 @@ internal sealed class BufService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts listening for document saves (once), so a saved file's check results are dropped from the Error List;
+    /// the language server's live diagnostics cover it from then on.
+    /// </summary>
+    private async Task EnsureSaveTrackingAsync()
+    {
+        if (this.documentSubscription is not null)
+        {
+            return;
+        }
+
+        var subscription = await this.extensibility.Documents().SubscribeAsync(new SaveListener(this), filterRegex: null, this.shutdownToken).ConfigureAwait(false);
+        if (Interlocked.CompareExchange(ref this.documentSubscription, subscription, null) is not null)
+        {
+            subscription.Dispose();
+        }
+    }
+
+    private async Task OnDocumentSavedAsync(Uri moniker)
+    {
+        if (!moniker.IsFile || !moniker.LocalPath.EndsWith(".proto", StringComparison.OrdinalIgnoreCase) || this.diagnostics is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await this.diagnostics.ClearFileAsync(moniker.LocalPath, this.shutdownToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            this.trace?.TraceEvent(TraceEventType.Warning, 0, $"Clearing results for {moniker} failed: {ex.Message}");
+        }
+    }
+
+    private sealed class SaveListener(BufService owner) : IDocumentEventsListener
+    {
+        public Task SavedAsync(DocumentEventArgs e, CancellationToken token)
+        {
+            _ = owner.OnDocumentSavedAsync(e.Moniker);
+            return Task.CompletedTask;
+        }
+
+        public Task OpenedAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public Task ClosedAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public Task SavingAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public Task RenamedAsync(RenamedDocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public Task ShownAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public Task HiddenAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+
+        public void Dispose()
+        {
+        }
+    }
+
     public Task LogAsync(string line) => this.WriteAsync($"[{DateTime.Now:HH:mm:ss}] {line}");
 
     /// <summary>Writes multi-line tool output verbatim (no timestamp), skipping empty text.</summary>
@@ -229,6 +351,8 @@ internal sealed class BufService : IDisposable
     public void Dispose()
     {
         this.output?.Dispose();
+        this.documentSubscription?.Dispose();
+        this.diagnostics?.Dispose();
         this.resolveGate.Dispose();
         this.outputGate.Dispose();
         this.commandGate.Dispose();

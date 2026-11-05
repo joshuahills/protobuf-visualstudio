@@ -65,6 +65,17 @@ internal sealed record BufAnnotation(string Path, int StartLine, int StartColumn
         return annotations;
     }
 
+    /// <summary>
+    /// Parses both streams of a finished run: <c>buf lint</c> and <c>buf breaking</c> write annotations to stdout,
+    /// while <c>buf build</c> writes compile errors to stderr.
+    /// </summary>
+    public static IReadOnlyList<BufAnnotation> ParseOutput(BufResult result, string workingDirectory) =>
+        [.. ParseJsonLines(result.StandardOutput, workingDirectory), .. ParseJsonLines(result.StandardError, workingDirectory)];
+
+    /// <summary>The stderr lines that are not JSON annotations (buf's own failure messages), for the log.</summary>
+    public static string NonJsonLines(string output) =>
+        string.Join(Environment.NewLine, output.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => !l.TrimStart().StartsWith('{')));
+
     /// <summary>Formats the annotation as a clickable line for the Output pane: <c>path(line,col): error TYPE: message</c>.</summary>
     public string ToMsBuildLine(string severity) => $"{this.Path}({this.StartLine},{this.StartColumn}): {severity} {this.Type}: {this.Message}";
 
