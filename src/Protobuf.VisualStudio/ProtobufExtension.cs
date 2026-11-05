@@ -43,6 +43,7 @@ internal sealed class ProtobufExtension : Extension
         [
             MenuChild.Command<BuildCommand>(),
             MenuChild.Command<LintCommand>(),
+            MenuChild.Command<BreakingCommand>(),
             MenuChild.Command<FormatCommand>(),
             MenuChild.Command<GenerateCommand>(),
             MenuChild.Command<ClearResultsCommand>(),

@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.Extensibility.Settings;
 namespace Protobuf.VisualStudio;
 
 /// <summary>Values read from Tools &gt; Options &gt; Buf when they are needed.</summary>
-internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs);
+internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs, string BreakingAgainst);
 
 /// <summary>Settings surfaced under Tools &gt; Options &gt; Buf.</summary>
 internal static class BufSettings
@@ -33,6 +33,12 @@ internal static class BufSettings
         Description = "Start the language server with --debug and write its log to the 'Buf' output pane. Takes effect when the server restarts.",
     };
 
+    [VisualStudioContribution]
+    public static Setting.String BreakingAgainst { get; } = new("breakingAgainst", "Breaking change baseline", Category, string.Empty)
+    {
+        Description = "What Check Breaking Changes compares against: any buf input, such as .git#branch=develop, .git#tag=v1.0.0 or buf.build/owner/module. Leave empty to use the git default branch (origin/HEAD, then main, then master) of the repository containing each workspace.",
+    };
+
     public static async Task<EffectiveSettings> ReadAsync(VisualStudioExtensibility extensibility, CancellationToken cancellationToken)
     {
         SettingCategory[] categories = [Category];
@@ -40,6 +46,7 @@ internal static class BufSettings
         return new EffectiveSettings(
             BufPath: values.ValueOrDefault(BufPath, string.Empty).Trim(),
             AutoInstall: values.ValueOrDefault(AutoInstall, true),
-            DebugLogs: values.ValueOrDefault(DebugLogs, false));
+            DebugLogs: values.ValueOrDefault(DebugLogs, false),
+            BreakingAgainst: values.ValueOrDefault(BreakingAgainst, string.Empty).Trim());
     }
 }

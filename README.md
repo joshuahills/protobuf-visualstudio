@@ -43,6 +43,10 @@ under the solution:
   grouped by provider ("Buf Build", "Buf Lint"). A new run replaces the previous one, and a file's entries are
   dropped when you save it (the language server's live diagnostics take over). Clear Error List Results removes
   them all.
+- Check Breaking Changes: `buf breaking` against the git default branch (origin/HEAD, then `main`, then
+  `master`, using the remote-tracking branch if there is no local one), results in the Error List under
+  "Buf Breaking". Workspaces below the repository root are handled with `subdir=`. Set **Breaking change
+  baseline** to compare with something else, e.g. `.git#tag=v1.0.0` or `buf.build/owner/module`.
 - Format All Proto Files, Generate.
 - Update Dependencies, Prune Dependencies, Initialize buf.yaml.
 - List Lint Rules, List Breaking Change Rules.
@@ -74,6 +78,7 @@ buf 1.43.0 or later; 1.59.0 or later uses the stable `buf lsp serve`.
 | Buf CLI path | (auto) | Use a specific `buf.exe` |
 | Download the Buf CLI if it is missing | on | Auto-install the latest release |
 | Language server debug logging | off | Start the server with `--debug` (restart to apply) |
+| Breaking change baseline | (git default branch) | Any buf input to compare against for Check Breaking Changes |
 
 ## Building, installing and debugging
 
