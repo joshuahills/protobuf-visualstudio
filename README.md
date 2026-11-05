@@ -1,5 +1,10 @@
 # Protobuf Language Support for Visual Studio
 
+[![Install from the Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-5C2D91?logo=visualstudio&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=JoshHills.protobuf-language-support)
+[![Marketplace version](https://vsmarketplacebadges.dev/version-short/JoshHills.protobuf-language-support.svg)](https://marketplace.visualstudio.com/items?itemName=JoshHills.protobuf-language-support)
+[![Marketplace installs](https://vsmarketplacebadges.dev/installs-short/JoshHills.protobuf-language-support.svg)](https://marketplace.visualstudio.com/items?itemName=JoshHills.protobuf-language-support)
+[![Build](https://github.com/joshuahills/protobuf-visualstudio/actions/workflows/build.yml/badge.svg)](https://github.com/joshuahills/protobuf-visualstudio/actions/workflows/build.yml)
+
 A Visual Studio 2026 extension that brings `.proto` editing up to the level of the
 [Buf extension for VS Code](https://github.com/bufbuild/vscode-buf). It hosts the
 [Buf Language Server](https://buf.build/docs/cli/editor-integration/) (`buf lsp serve`) in Visual Studio's
@@ -10,6 +15,12 @@ This is an independent project. It is not affiliated with Buf Technologies.
 It is built on the out-of-process
 [VisualStudio.Extensibility](https://learn.microsoft.com/visualstudio/extensibility/visualstudio.extensibility/visualstudio-extensibility)
 model and targets **.NET 10**.
+
+## Install
+
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=JoshHills.protobuf-language-support) (Extensions > Manage Extensions in Visual Studio 2026,
+search for "Protobuf Language Support"), or download the VSIX from
+[GitHub Releases](https://github.com/joshuahills/protobuf-visualstudio/releases).
 
 ## Features
 
