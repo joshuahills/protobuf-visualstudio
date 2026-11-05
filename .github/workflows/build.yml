@@ -31,7 +31,7 @@ jobs:
 
       # A real buf for the integration tests. Using the official action avoids the anonymous GitHub API rate limit
       # that the extension's own installer would hit on shared runners; the installer is unit tested with a fake.
-      - uses: bufbuild/buf-action@v1
+      - uses: bufbuild/buf-action@37ac33d8960807670a6e9719080e885197b09cc6 # v1.7.0
         id: buf
         with:
           setup_only: true
