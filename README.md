@@ -36,6 +36,10 @@ In `.proto` files, provided by the Buf Language Server:
 - Quick actions: organize imports, mark as deprecated, add a `buf:lint:ignore` comment.
 - Navigation bar and document symbols, Go To All symbol search, folding, and clickable imports.
 
+The language server restarts by itself when you change the Buf CLI path or debug logging setting, and after a
+crash, up to 4 times in 3 minutes. After that it stays stopped until you use Tools > Buf > Restart Language
+Server.
+
 From the **Tools > Buf** menu, each running in every Buf workspace (folder with `buf.yaml` or `buf.work.yaml`)
 under the solution:
 
