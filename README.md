@@ -1,4 +1,4 @@
-# Protobuf Language Support for Visual Studio (Buf)
+# Protobuf Language Support for Visual Studio
 
 A Visual Studio 2026 extension that brings `.proto` editing up to the level of the
 [Buf extension for VS Code](https://github.com/bufbuild/vscode-buf). It hosts the

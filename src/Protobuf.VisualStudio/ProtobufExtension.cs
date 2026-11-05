@@ -20,7 +20,7 @@ internal sealed class ProtobufExtension : Extension
             id: "Protobuf.VisualStudio.4f6c2a9e-8d1b-4e57-9c3a-2b7e6f0d5a14",
             version: this.ExtensionAssemblyVersion,
             publisherName: "Josh Hills",
-            displayName: "Protobuf Language Support (Buf)",
+            displayName: "Protobuf Language Support",
             description: "Protocol Buffers IntelliSense for Visual Studio, powered by the Buf language server: completion, go to definition, hover, references, rename, formatting, and build and lint diagnostics as you type.")
         {
             Tags = ["protobuf", "proto", "protocol buffers", "buf", "grpc", "lsp"],
