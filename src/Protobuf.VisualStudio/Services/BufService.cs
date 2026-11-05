@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Documents;
+using Microsoft.VisualStudio.Extensibility.Editor;
 using Microsoft.VisualStudio.Extensibility.Languages;
 using Microsoft.VisualStudio.RpcContracts.Documents;
 using Microsoft.VisualStudio.Extensibility.Shell;
@@ -210,7 +211,7 @@ internal sealed class BufService : IDisposable
 
             if (check is not null)
             {
-                await this.EnsureSaveTrackingAsync().ConfigureAwait(false);
+                await this.EnsureDocumentTrackingAsync().ConfigureAwait(false);
             }
 
             IReadOnlyList<string> roots = workspaceFor is not null
@@ -295,10 +296,10 @@ internal sealed class BufService : IDisposable
     }
 
     /// <summary>
-    /// Starts listening for document saves (once), so a saved file's check results are dropped from the Error List;
-    /// the language server's live diagnostics cover it from then on.
+    /// Starts listening for document saves (once): saving a .proto formats it first (if enabled), and afterwards its
+    /// check results are dropped from the Error List, since the language server's live diagnostics cover it.
     /// </summary>
-    private async Task EnsureSaveTrackingAsync()
+    public async Task EnsureDocumentTrackingAsync()
     {
         if (this.documentSubscription is not null)
         {
@@ -309,6 +310,62 @@ internal sealed class BufService : IDisposable
         if (Interlocked.CompareExchange(ref this.documentSubscription, subscription, null) is not null)
         {
             subscription.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Format on save: called while Visual Studio is saving and awaited, so the formatted text is what gets written.
+    /// Bounded by a short timeout so a slow buf never holds up a save.
+    /// </summary>
+    private async Task OnDocumentSavingAsync(Uri moniker, CancellationToken cancellationToken)
+    {
+        if (!moniker.IsFile || !moniker.LocalPath.EndsWith(".proto", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, this.shutdownToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+
+            var settings = await BufSettings.ReadAsync(this.extensibility, timeout.Token).ConfigureAwait(false);
+            if (!settings.FormatOnSave)
+            {
+                return;
+            }
+
+            var buf = await this.ResolveBufAsync(allowInstall: false, timeout.Token).ConfigureAwait(false);
+            if (buf is null)
+            {
+                return;
+            }
+
+            var document = await this.extensibility.Documents().OpenTextDocumentAsync(moniker, timeout.Token).ConfigureAwait(false);
+            var text = document.Text.CopyToString();
+            var formatted = await ProtoFormatter.FormatAsync(buf.Path, text, timeout.Token).ConfigureAwait(false);
+            if (formatted is null)
+            {
+                await this.LogAsync($"Format on save skipped {Path.GetFileName(moniker.LocalPath)}: it doesn't parse yet.").ConfigureAwait(false);
+                return;
+            }
+
+            if (ProtoFormatter.MinimalReplacement(text, formatted) is not { } edit)
+            {
+                return;
+            }
+
+            await this.extensibility.Editor().EditAsync(
+                batch => document.AsEditable(batch).Replace(new TextRange(document, edit.Start, edit.Length), edit.NewText),
+                timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await this.LogAsync($"Format on save timed out for {Path.GetFileName(moniker.LocalPath)}; saved without formatting.").ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await this.LogAsync($"Format on save failed for {Path.GetFileName(moniker.LocalPath)}: {ex.Message}").ConfigureAwait(false);
         }
     }
 
@@ -341,7 +398,7 @@ internal sealed class BufService : IDisposable
 
         public Task ClosedAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
 
-        public Task SavingAsync(DocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
+        public Task SavingAsync(DocumentEventArgs e, CancellationToken token) => owner.OnDocumentSavingAsync(e.Moniker, token);
 
         public Task RenamedAsync(RenamedDocumentEventArgs e, CancellationToken token) => Task.CompletedTask;
 

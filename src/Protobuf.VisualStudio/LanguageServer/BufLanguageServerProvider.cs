@@ -64,6 +64,9 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         var settings = await BufSettings.ReadAsync(this.Extensibility, cancellationToken).ConfigureAwait(false);
         this.policy.SettingsChanged(new ServerLaunchSettings(settings.BufPath, settings.DebugLogs, settings.BufVersion));
         await this.EnsureSettingsSubscriptionAsync(cancellationToken).ConfigureAwait(false);
+
+        // A .proto is open: start format on save and Error List housekeeping for saves.
+        await this.service.EnsureDocumentTrackingAsync().ConfigureAwait(false);
         var arguments = buf.LanguageServerArguments(settings.DebugLogs);
         var workingDirectory = await this.service.GetSolutionDirectoryAsync(cancellationToken).ConfigureAwait(false);
 

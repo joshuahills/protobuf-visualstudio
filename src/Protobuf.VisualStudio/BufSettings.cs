@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.Extensibility.Settings;
 namespace Protobuf.VisualStudio;
 
 /// <summary>Values read from Tools &gt; Options &gt; Buf when they are needed.</summary>
-internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs, string BreakingAgainst, string BufVersion);
+internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs, string BreakingAgainst, string BufVersion, bool FormatOnSave);
 
 /// <summary>Settings surfaced under Tools &gt; Options &gt; Buf.</summary>
 internal static class BufSettings
@@ -34,6 +34,12 @@ internal static class BufSettings
     };
 
     [VisualStudioContribution]
+    public static Setting.Boolean FormatOnSave { get; } = new("formatOnSave", "Format .proto files on save", Category, defaultValue: true)
+    {
+        Description = "Run buf format on a .proto document when you save it. Files with syntax errors are left as they are.",
+    };
+
+    [VisualStudioContribution]
     public static Setting.Boolean DebugLogs { get; } = new("debugLogs", "Language server debug logging", Category, defaultValue: false)
     {
         Description = "Start the language server with --debug and write its log to the 'Buf' output pane. Takes effect when the server restarts.",
@@ -54,6 +60,7 @@ internal static class BufSettings
             AutoInstall: values.ValueOrDefault(AutoInstall, true),
             DebugLogs: values.ValueOrDefault(DebugLogs, false),
             BreakingAgainst: values.ValueOrDefault(BreakingAgainst, string.Empty).Trim(),
-            BufVersion: values.ValueOrDefault(BufVersion, string.Empty).Trim());
+            BufVersion: values.ValueOrDefault(BufVersion, string.Empty).Trim(),
+            FormatOnSave: values.ValueOrDefault(FormatOnSave, true));
     }
 }
