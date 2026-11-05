@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package acme.common.v1;
+
+option csharp_namespace = "Acme.Common.V1";
+
+// A point on the Earth's surface.
+message Location {
+  // Latitude in degrees, -90 to 90.
+  double latitude = 1;
+  // Longitude in degrees, -180 to 180.
+  double longitude = 2;
+  // Optional human readable name, for example "London".
+  string display_name = 3;
+}

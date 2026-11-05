@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Protobuf.VisualStudio/Protobuf.VisualStudio.csproj" />
+  </Folder>
+</Solution>

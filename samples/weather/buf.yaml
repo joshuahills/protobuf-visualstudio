@@ -1,0 +1,10 @@
+# Buf v2 workspace for trying the extension. Open this folder (File > Open > Folder) in Visual Studio.
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,6 @@
+version: v2
+clean: true
+plugins:
+  # Remote plugin on the Buf Schema Registry; needs network access. Output lands in gen/csharp.
+  - remote: buf.build/protocolbuffers/csharp
+    out: gen/csharp

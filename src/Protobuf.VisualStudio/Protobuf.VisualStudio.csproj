@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Runs out-of-process in the Visual Studio 2026 .NET 10 extension host. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Protobuf.VisualStudio</RootNamespace>
+    <AssemblyName>Protobuf.VisualStudio</AssemblyName>
+    <Version>0.1.0</Version>
+    <!-- The VS SDK pulls transitive packages with advisories we cannot change; audit only direct references. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
+    <!--
+      VSEXTPREVIEW_LSP / VSEXTPREVIEW_SETTINGS / VSEXTPREVIEW_OUTPUTWINDOW: these APIs are still flagged as preview
+      in the 17.x SDK. CEE0027: strings are English-only; no localisation planned.
+    -->
+    <NoWarn>$(NoWarn);VSEXTPREVIEW_LSP;VSEXTPREVIEW_SETTINGS;VSEXTPREVIEW_OUTPUTWINDOW;CEE0027</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\Icon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
