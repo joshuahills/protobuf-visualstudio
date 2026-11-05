@@ -25,6 +25,15 @@ public class RestartPolicyTests
     }
 
     [Fact]
+    public void Changing_the_pinned_version_restarts()
+    {
+        var policy = new RestartPolicy(this.time);
+        policy.SettingsChanged(new("", false, ""));
+
+        Assert.True(policy.SettingsChanged(new("", false, "1.70.0")));
+    }
+
+    [Fact]
     public void Each_change_is_compared_with_the_previous_one()
     {
         var policy = new RestartPolicy(this.time);

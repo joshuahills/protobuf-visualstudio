@@ -1,7 +1,7 @@
 namespace Protobuf.VisualStudio.LanguageServer;
 
 /// <summary>The settings that change how the language server process is started.</summary>
-internal sealed record ServerLaunchSettings(string BufPath, bool DebugLogs);
+internal sealed record ServerLaunchSettings(string BufPath, bool DebugLogs, string BufVersion = "");
 
 /// <summary>
 /// Decides when the Buf language server should be restarted automatically: when a launch setting changes, and after

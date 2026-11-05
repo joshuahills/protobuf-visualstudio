@@ -73,19 +73,27 @@ The extension looks for `buf.exe` in this order:
 
 1. Tools > Options > Buf > Buf CLI path (a file or folder; relative paths resolve against the solution folder;
    `%VARIABLES%` are expanded).
-2. `PATH`.
-3. `%LOCALAPPDATA%\BufForVisualStudio\buf\v<version>\buf.exe`, the extension's own copy.
+2. If **Buf CLI version** is set (e.g. `1.75.0`): the extension's own copy of that version, never `PATH`, so
+   the pin applies even on machines with buf installed. It's downloaded if missing.
+3. `PATH`.
+4. `%LOCALAPPDATA%\BufForVisualStudio\buf\v<version>\buf.exe`, the newest copy the extension installed.
 
-If none is found and **Download the Buf CLI if it is missing** is on (the default), the latest release is
-downloaded from GitHub. The download is checked against the release's `sha256.txt`. The language server needs
-buf 1.43.0 or later; 1.59.0 or later uses the stable `buf lsp serve`.
+If none is found and **Download the Buf CLI if it is missing** is on (the default), the pinned version or the
+latest release is downloaded from GitHub. Nothing is installed unless:
+
+- the release's `sha256.txt` carries a valid [minisign](https://jedisct1.github.io/minisign/) signature from
+  [Buf's release key](https://buf.build/docs/cli/installation/), and
+- the binary matches its entry in that file.
+
+The language server needs buf 1.43.0 or later; 1.59.0 or later uses the stable `buf lsp serve`.
 
 ## Settings (Tools > Options > Buf)
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | Buf CLI path | (auto) | Use a specific `buf.exe` |
-| Download the Buf CLI if it is missing | on | Auto-install the latest release |
+| Buf CLI version | (latest) | Pin a release, e.g. `1.75.0`; restarts the server when changed |
+| Download the Buf CLI if it is missing | on | Auto-install the pinned or latest release |
 | Language server debug logging | off | Start the server with `--debug` (restart to apply) |
 | Breaking change baseline | (git default branch) | Any buf input to compare against for Check Breaking Changes |
 

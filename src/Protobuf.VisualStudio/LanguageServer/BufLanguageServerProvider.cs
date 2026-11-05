@@ -62,7 +62,7 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         }
 
         var settings = await BufSettings.ReadAsync(this.Extensibility, cancellationToken).ConfigureAwait(false);
-        this.policy.SettingsChanged(new ServerLaunchSettings(settings.BufPath, settings.DebugLogs));
+        this.policy.SettingsChanged(new ServerLaunchSettings(settings.BufPath, settings.DebugLogs, settings.BufVersion));
         await this.EnsureSettingsSubscriptionAsync(cancellationToken).ConfigureAwait(false);
         var arguments = buf.LanguageServerArguments(settings.DebugLogs);
         var workingDirectory = await this.service.GetSolutionDirectoryAsync(cancellationToken).ConfigureAwait(false);
@@ -189,7 +189,7 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         }
     }
 
-    /// <summary>Restarts the server when the CLI path or debug logging setting changes.</summary>
+    /// <summary>Restarts the server when the CLI path, pinned version or debug logging setting changes.</summary>
     private async Task EnsureSettingsSubscriptionAsync(CancellationToken cancellationToken)
     {
         if (this.settingsSubscription is not null)
@@ -198,11 +198,14 @@ internal sealed class BufLanguageServerProvider : LanguageServerProvider
         }
 
         var subscription = await this.Extensibility.Settings().SubscribeAsync(
-            [BufSettings.BufPath, BufSettings.DebugLogs],
+            [BufSettings.BufPath, BufSettings.DebugLogs, BufSettings.BufVersion],
             cancellationToken,
             values =>
             {
-                var current = new ServerLaunchSettings(values.ValueOrDefault(BufSettings.BufPath, string.Empty).Trim(), values.ValueOrDefault(BufSettings.DebugLogs, false));
+                var current = new ServerLaunchSettings(
+                    values.ValueOrDefault(BufSettings.BufPath, string.Empty).Trim(),
+                    values.ValueOrDefault(BufSettings.DebugLogs, false),
+                    values.ValueOrDefault(BufSettings.BufVersion, string.Empty).Trim());
                 if (this.policy.SettingsChanged(current))
                 {
                     _ = this.RestartAsync("Buf settings changed");

@@ -1,13 +1,16 @@
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Protobuf.VisualStudio.Security;
 
 namespace Protobuf.VisualStudio.Services;
 
 /// <summary>
-/// Downloads the latest Buf CLI release from GitHub, verifies it against the release's <c>sha256.txt</c>, and
-/// stores it as <c>{installRoot}\v{version}\buf.exe</c>.
+/// Downloads a Buf CLI release from GitHub (the latest, or a pinned version) and stores it as
+/// <c>{installRoot}\v{version}\buf.exe</c>. Before anything is trusted, the release's <c>sha256.txt</c> must carry a
+/// valid minisign signature from Buf's release key; the binary must then match its entry in that file.
 /// </summary>
 internal static class BufInstaller
 {
@@ -17,22 +20,32 @@ internal static class BufInstaller
         ? "buf-Windows-arm64.exe"
         : "buf-Windows-x86_64.exe";
 
-    public static Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, CancellationToken cancellationToken) =>
-        InstallAsync(installRoot, log, progress, handler: null, LatestReleaseApi, cancellationToken);
+    /// <param name="version">A version such as <c>1.75.0</c> to install that release, or null for the latest.</param>
+    public static Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, CancellationToken cancellationToken, string? version = null) =>
+        InstallAsync(installRoot, log, progress, handler: null, ReleaseApi(version), Minisign.BufPublicKey, cancellationToken);
 
-    /// <summary>Test seam: <paramref name="handler"/> replaces the network and <paramref name="releaseApi"/> the release URL.</summary>
-    internal static async Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, HttpMessageHandler? handler, string releaseApi, CancellationToken cancellationToken)
+    /// <summary>The GitHub API URL for <paramref name="version"/> (with or without a leading v), or the latest release.</summary>
+    public static string ReleaseApi(string? version) => string.IsNullOrWhiteSpace(version)
+        ? LatestReleaseApi
+        : $"https://api.github.com/repos/bufbuild/buf/releases/tags/v{version.Trim().TrimStart('v', 'V')}";
+
+    /// <summary>
+    /// Test seam: <paramref name="handler"/> replaces the network, <paramref name="releaseApi"/> the release URL and
+    /// <paramref name="publicKey"/> Buf's signing key.
+    /// </summary>
+    internal static async Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, HttpMessageHandler? handler, string releaseApi, string publicKey, CancellationToken cancellationToken)
     {
         using var http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         http.Timeout = Timeout.InfiniteTimeSpan;
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Protobuf-for-Visual-Studio", "0.1"));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
-        log($"Looking up the latest Buf CLI release ({releaseApi})");
+        log($"Looking up the Buf CLI release ({releaseApi})");
         using var release = JsonDocument.Parse(await http.GetStringAsync(releaseApi, cancellationToken).ConfigureAwait(false));
         var tag = release.RootElement.GetProperty("tag_name").GetString() ?? throw new InvalidOperationException("The release has no tag.");
         string? exeUrl = null;
         string? checksumUrl = null;
+        string? signatureUrl = null;
         foreach (var asset in release.RootElement.GetProperty("assets").EnumerateArray())
         {
             var name = asset.GetProperty("name").GetString();
@@ -45,11 +58,15 @@ internal static class BufInstaller
             {
                 checksumUrl = url;
             }
+            else if (name == "sha256.txt.minisig")
+            {
+                signatureUrl = url;
+            }
         }
 
-        if (exeUrl is null || checksumUrl is null)
+        if (exeUrl is null || checksumUrl is null || signatureUrl is null)
         {
-            throw new InvalidOperationException($"Release {tag} has no {AssetName} or sha256.txt asset.");
+            throw new InvalidOperationException($"Release {tag} is missing {AssetName}, sha256.txt or sha256.txt.minisig, so it can't be verified.");
         }
 
         var versionDir = Path.Combine(installRoot, "v" + tag.TrimStart('v'));
@@ -60,7 +77,20 @@ internal static class BufInstaller
             return exe;
         }
 
-        var checksums = await http.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
+        // Verify the exact bytes that were signed, before decoding them.
+        var checksumBytes = await http.GetByteArrayAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
+        var signature = await http.GetStringAsync(signatureUrl, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Minisign.Verify(publicKey, signature, checksumBytes);
+        }
+        catch (MinisignException ex)
+        {
+            throw new InvalidOperationException($"sha256.txt for {tag} failed its signature check ({ex.Message}). Nothing was installed.", ex);
+        }
+
+        log("Signature of sha256.txt verified with Buf's release key.");
+        var checksums = Encoding.UTF8.GetString(checksumBytes);
         var expected = FindChecksum(checksums, AssetName)
             ?? throw new InvalidOperationException($"sha256.txt for {tag} has no entry for {AssetName}.");
 

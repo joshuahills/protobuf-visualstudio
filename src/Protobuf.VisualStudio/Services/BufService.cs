@@ -70,8 +70,8 @@ internal sealed class BufService : IDisposable
     }
 
     /// <summary>
-    /// Finds buf.exe and its version. When none is found and auto-install is on, downloads the latest release once
-    /// per session.
+    /// Finds buf.exe and its version. When none is found and auto-install is on, downloads the pinned version (or the
+    /// latest release) once per session.
     /// </summary>
     public async Task<BufBinary?> ResolveBufAsync(bool allowInstall, CancellationToken cancellationToken)
     {
@@ -80,7 +80,8 @@ internal sealed class BufService : IDisposable
         {
             var settings = await BufSettings.ReadAsync(this.extensibility, cancellationToken).ConfigureAwait(false);
             var baseDirectory = await this.GetSolutionDirectoryAsync(cancellationToken).ConfigureAwait(false);
-            var binary = await BufCli.ResolveAsync(settings.BufPath, baseDirectory, cancellationToken).ConfigureAwait(false);
+            var pinned = string.IsNullOrEmpty(settings.BufPath) ? BufCli.NormaliseVersion(settings.BufVersion) : null;
+            var binary = await BufCli.ResolveAsync(settings.BufPath, baseDirectory, cancellationToken, pinned).ConfigureAwait(false);
             if (binary is not null)
             {
                 return binary;
@@ -98,10 +99,11 @@ internal sealed class BufService : IDisposable
                 return null;
             }
 
-            await this.LogAsync("No buf.exe found; downloading the latest release because 'Download the Buf CLI if it is missing' is on.").ConfigureAwait(false);
+            var which = pinned is null ? "the latest release" : $"the pinned version {pinned}";
+            await this.LogAsync($"No buf.exe found; downloading {which} because 'Download the Buf CLI if it is missing' is on.").ConfigureAwait(false);
             try
             {
-                await this.InstallCoreAsync(cancellationToken).ConfigureAwait(false);
+                await this.InstallCoreAsync(cancellationToken, pinned).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -111,7 +113,7 @@ internal sealed class BufService : IDisposable
                 return null;
             }
 
-            return await BufCli.ResolveAsync(null, baseDirectory, cancellationToken).ConfigureAwait(false);
+            return await BufCli.ResolveAsync(null, baseDirectory, cancellationToken, pinned).ConfigureAwait(false);
         }
         finally
         {
@@ -119,15 +121,19 @@ internal sealed class BufService : IDisposable
         }
     }
 
-    /// <summary>Installs (or updates to) the latest release, then restarts the language server so it picks it up.</summary>
+    /// <summary>
+    /// Installs the pinned version (or updates to the latest release), then restarts the language server so it picks
+    /// it up.
+    /// </summary>
     public async Task InstallOrUpdateAsync()
     {
         try
         {
-            var exe = await this.InstallCoreAsync(this.shutdownToken).ConfigureAwait(false);
-            this.installDeclined = false;
             var settings = await BufSettings.ReadAsync(this.extensibility, this.shutdownToken).ConfigureAwait(false);
-            var active = BufCli.Locate(settings.BufPath, await this.GetSolutionDirectoryAsync(this.shutdownToken).ConfigureAwait(false));
+            var pinned = string.IsNullOrEmpty(settings.BufPath) ? BufCli.NormaliseVersion(settings.BufVersion) : null;
+            var exe = await this.InstallCoreAsync(this.shutdownToken, pinned).ConfigureAwait(false);
+            this.installDeclined = false;
+            var active = BufCli.Locate(settings.BufPath, await this.GetSolutionDirectoryAsync(this.shutdownToken).ConfigureAwait(false), pinned);
             var note = active is not null && !string.Equals(active, exe, StringComparison.OrdinalIgnoreCase)
                 ? $"\n\nNote: {active} takes precedence (configured path or PATH), so that copy stays in use."
                 : string.Empty;
@@ -372,13 +378,13 @@ internal sealed class BufService : IDisposable
         this.commandGate.Dispose();
     }
 
-    private async Task<string> InstallCoreAsync(CancellationToken cancellationToken)
+    private async Task<string> InstallCoreAsync(CancellationToken cancellationToken, string? version = null)
     {
         using var progress = await this.extensibility.Shell()
             .StartProgressReportingAsync("Installing Buf CLI", new ProgressReporterOptions(isWorkCancellable: true), cancellationToken)
             .ConfigureAwait(false);
         var reporter = new Progress<double>(fraction => progress.Report(new ProgressStatus((int)(fraction * 100), $"Downloading Buf CLI {fraction:P0}")));
-        return await BufInstaller.InstallAsync(BufCli.DefaultInstallRoot, this.Log, reporter, progress.CancellationToken).ConfigureAwait(false);
+        return await BufInstaller.InstallAsync(BufCli.DefaultInstallRoot, this.Log, reporter, progress.CancellationToken, version).ConfigureAwait(false);
     }
 
     private async Task WriteAsync(string text)

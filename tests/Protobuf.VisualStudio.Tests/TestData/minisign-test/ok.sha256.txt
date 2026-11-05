@@ -1,0 +1,3 @@
+deadbeef  buf-Linux-x86_64
+a1c85500b5fe9c0866cbe65417838b006246b824633ade1faf0a2e4e6ea36fb8  buf-Windows-arm64.exe
+a1c85500b5fe9c0866cbe65417838b006246b824633ade1faf0a2e4e6ea36fb8  buf-Windows-x86_64.exe

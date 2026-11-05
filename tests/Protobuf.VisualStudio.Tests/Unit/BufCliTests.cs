@@ -98,6 +98,45 @@ public sealed class BufCliTests : IDisposable
     }
 
     [Fact]
+    public void A_pinned_version_uses_that_installed_copy_instead_of_PATH()
+    {
+        var onPath = this.temp.File(@"path\buf.exe");
+        this.temp.File(@"install\v1.80.0\buf.exe");
+        var pinned = this.temp.File(@"install\v1.70.0\buf.exe");
+
+        Assert.Equal(pinned, BufCli.Locate(null, baseDirectory: null, Path.GetDirectoryName(onPath), this.InstallRoot, pinnedVersion: " v1.70.0 "));
+    }
+
+    [Fact]
+    public void A_pinned_version_that_is_not_installed_finds_nothing_so_it_gets_downloaded()
+    {
+        var onPath = this.temp.File(@"path\buf.exe");
+        this.temp.File(@"install\v1.80.0\buf.exe");
+
+        Assert.Null(BufCli.Locate(null, baseDirectory: null, Path.GetDirectoryName(onPath), this.InstallRoot, pinnedVersion: "1.70.0"));
+    }
+
+    [Fact]
+    public void A_configured_path_wins_over_a_pinned_version()
+    {
+        var configured = this.temp.File(@"tools\buf.exe");
+        this.temp.File(@"install\v1.70.0\buf.exe");
+
+        Assert.Equal(configured, BufCli.Locate(configured, baseDirectory: null, pathVariable: null, this.InstallRoot, pinnedVersion: "1.70.0"));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("  ", null)]
+    [InlineData("1.75.0", "1.75.0")]
+    [InlineData(" v1.75.0 ", "1.75.0")]
+    [InlineData("V2.0.0", "2.0.0")]
+    public void NormaliseVersion_strips_whitespace_and_a_leading_v(string? input, string? expected)
+    {
+        Assert.Equal(expected, BufCli.NormaliseVersion(input));
+    }
+
+    [Fact]
     public void FindInstalled_picks_the_highest_version_numerically()
     {
         this.temp.File(@"install\v1.9.0\buf.exe");

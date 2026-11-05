@@ -42,11 +42,15 @@ internal static partial class BufCli
     /// Resolves buf.exe in order: the configured path (file or folder, relative to <paramref name="baseDirectory"/>),
     /// PATH, then the newest copy under <see cref="DefaultInstallRoot"/>.
     /// </summary>
-    public static string? Locate(string? configuredPath, string? baseDirectory) =>
-        Locate(configuredPath, baseDirectory, Environment.GetEnvironmentVariable("PATH"), DefaultInstallRoot);
+    /// <param name="pinnedVersion">
+    /// When set (and no path is configured), only the extension's own copy of that version is used, never PATH, so a
+    /// pin takes effect on machines that also have buf installed.
+    /// </param>
+    public static string? Locate(string? configuredPath, string? baseDirectory, string? pinnedVersion = null) =>
+        Locate(configuredPath, baseDirectory, Environment.GetEnvironmentVariable("PATH"), DefaultInstallRoot, pinnedVersion);
 
     /// <summary>Test seam: the PATH value and install root are passed in instead of read from the machine.</summary>
-    internal static string? Locate(string? configuredPath, string? baseDirectory, string? pathVariable, string installRoot)
+    internal static string? Locate(string? configuredPath, string? baseDirectory, string? pathVariable, string installRoot, string? pinnedVersion = null)
     {
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
@@ -62,6 +66,12 @@ internal static partial class BufCli
             }
 
             return File.Exists(expanded) ? expanded : null;
+        }
+
+        if (NormaliseVersion(pinnedVersion) is { } pinned)
+        {
+            var exe = System.IO.Path.Combine(installRoot, "v" + pinned, "buf.exe");
+            return File.Exists(exe) ? exe : null;
         }
 
         foreach (var dir in (pathVariable ?? string.Empty).Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
@@ -99,9 +109,13 @@ internal static partial class BufCli
             .FirstOrDefault();
     }
 
-    public static async Task<BufBinary?> ResolveAsync(string? configuredPath, string? baseDirectory, CancellationToken cancellationToken)
+    /// <summary>"1.75.0" from " v1.75.0 ", or null when no version is given.</summary>
+    public static string? NormaliseVersion(string? version) =>
+        string.IsNullOrWhiteSpace(version) ? null : version.Trim().TrimStart('v', 'V');
+
+    public static async Task<BufBinary?> ResolveAsync(string? configuredPath, string? baseDirectory, CancellationToken cancellationToken, string? pinnedVersion = null)
     {
-        var path = Locate(configuredPath, baseDirectory);
+        var path = Locate(configuredPath, baseDirectory, pinnedVersion);
         if (path is null)
         {
             return null;

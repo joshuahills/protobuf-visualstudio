@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.Extensibility.Settings;
 namespace Protobuf.VisualStudio;
 
 /// <summary>Values read from Tools &gt; Options &gt; Buf when they are needed.</summary>
-internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs, string BreakingAgainst);
+internal sealed record EffectiveSettings(string BufPath, bool AutoInstall, bool DebugLogs, string BreakingAgainst, string BufVersion);
 
 /// <summary>Settings surfaced under Tools &gt; Options &gt; Buf.</summary>
 internal static class BufSettings
@@ -19,6 +19,12 @@ internal static class BufSettings
     public static Setting.String BufPath { get; } = new("bufPath", "Buf CLI path", Category, string.Empty)
     {
         Description = "Path to buf.exe or the folder that contains it. Relative paths resolve against the solution folder. Leave empty to use buf from PATH, or the copy this extension installed.",
+    };
+
+    [VisualStudioContribution]
+    public static Setting.String BufVersion { get; } = new("bufVersion", "Buf CLI version", Category, string.Empty)
+    {
+        Description = "Pin the Buf CLI to a release such as 1.75.0. The extension then uses (and if needed downloads) its own copy of that version instead of buf from PATH. Leave empty to use buf from PATH or the latest release. Ignored when Buf CLI path is set.",
     };
 
     [VisualStudioContribution]
@@ -47,6 +53,7 @@ internal static class BufSettings
             BufPath: values.ValueOrDefault(BufPath, string.Empty).Trim(),
             AutoInstall: values.ValueOrDefault(AutoInstall, true),
             DebugLogs: values.ValueOrDefault(DebugLogs, false),
-            BreakingAgainst: values.ValueOrDefault(BreakingAgainst, string.Empty).Trim());
+            BreakingAgainst: values.ValueOrDefault(BreakingAgainst, string.Empty).Trim(),
+            BufVersion: values.ValueOrDefault(BufVersion, string.Empty).Trim());
     }
 }
