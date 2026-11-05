@@ -42,7 +42,11 @@ internal static partial class BufCli
     /// Resolves buf.exe in order: the configured path (file or folder, relative to <paramref name="baseDirectory"/>),
     /// PATH, then the newest copy under <see cref="DefaultInstallRoot"/>.
     /// </summary>
-    public static string? Locate(string? configuredPath, string? baseDirectory)
+    public static string? Locate(string? configuredPath, string? baseDirectory) =>
+        Locate(configuredPath, baseDirectory, Environment.GetEnvironmentVariable("PATH"), DefaultInstallRoot);
+
+    /// <summary>Test seam: the PATH value and install root are passed in instead of read from the machine.</summary>
+    internal static string? Locate(string? configuredPath, string? baseDirectory, string? pathVariable, string installRoot)
     {
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
@@ -60,7 +64,7 @@ internal static partial class BufCli
             return File.Exists(expanded) ? expanded : null;
         }
 
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var dir in (pathVariable ?? string.Empty).Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {
@@ -76,7 +80,7 @@ internal static partial class BufCli
             }
         }
 
-        return FindInstalled(DefaultInstallRoot);
+        return FindInstalled(installRoot);
     }
 
     /// <summary>Returns the highest-versioned <c>v*\buf.exe</c> under <paramref name="installRoot"/>.</summary>

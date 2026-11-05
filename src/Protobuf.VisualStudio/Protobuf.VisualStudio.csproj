@@ -27,4 +27,8 @@
     <Content Include="Resources\Icon.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Protobuf.VisualStudio.Tests" />
+  </ItemGroup>
+
 </Project>

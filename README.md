@@ -102,6 +102,30 @@ The language server starts when the first `.proto` file is opened, not when a fo
 `samples\weather` is a small Buf v2 workspace: two packages, a cross-file import, a well-known type import,
 and one deliberate lint violation (`windSpeedKph`, FIELD_LOWER_SNAKE_CASE).
 
+## Tests
+
+```powershell
+dotnet test --project tests\Protobuf.VisualStudio.Tests                                          # everything
+dotnet test --project tests\Protobuf.VisualStudio.Tests -- --filter-not-trait "Category=Integration"   # unit only
+```
+
+`global.json` opts `dotnet test` into Microsoft.Testing.Platform, which xUnit v3 needs on the .NET 10 SDK.
+
+- **Unit tests** (`tests/.../Unit`, about 1 s, offline): buf.exe discovery (configured path, PATH, installed
+  versions), version parsing and the `lsp serve` / `beta lsp` cut-over, Buf workspace discovery, and the
+  installer's download and SHA-256 check against a fake HTTP server.
+- **Integration tests** (`tests/.../Integration`, trait `Category=Integration`, about 10 s): run the real Buf CLI
+  on `samples\weather` (build, lint in msvs format, rule listing, cancellation), and drive the real language
+  server over stdio, started exactly as the extension starts it. The server tests check the advertised
+  capabilities, lint diagnostics, go to definition across files, hover, completion, find references,
+  document symbols, formatting and semantic tokens.
+
+The integration tests use `BUF_PATH` if set. Otherwise they install the latest buf with the extension's own
+installer into `%TEMP%\protobuf-vs-testsuf-cache`, downloaded once and then reused. CI installs buf with
+`bufbuild/buf-action` and runs both suites before packaging.
+
+The tests don't run inside Visual Studio itself (see R-18 in the roadmap).
+
 ## Layout
 
 ```
@@ -114,6 +138,7 @@ src/Protobuf.VisualStudio/
   Services/BufInstaller                     GitHub release download with SHA-256 check
   Services/WorkspaceRoots                   Finds buf.yaml / buf.work.yaml roots under the solution
   Commands/                                 One class per Tools > Buf command
+tests/Protobuf.VisualStudio.Tests/         Unit and integration tests (xUnit v3)
 docs/                                       Feature analysis against vscode-buf
 samples/weather/                            Buf workspace for manual testing
 ```

@@ -11,20 +11,25 @@ namespace Protobuf.VisualStudio.Services;
 /// </summary>
 internal static class BufInstaller
 {
-    private const string LatestReleaseApi = "https://api.github.com/repos/bufbuild/buf/releases/latest";
+    public const string LatestReleaseApi = "https://api.github.com/repos/bufbuild/buf/releases/latest";
 
     public static string AssetName => RuntimeInformation.OSArchitecture == Architecture.Arm64
         ? "buf-Windows-arm64.exe"
         : "buf-Windows-x86_64.exe";
 
-    public static async Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, CancellationToken cancellationToken)
+    public static Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, CancellationToken cancellationToken) =>
+        InstallAsync(installRoot, log, progress, handler: null, LatestReleaseApi, cancellationToken);
+
+    /// <summary>Test seam: <paramref name="handler"/> replaces the network and <paramref name="releaseApi"/> the release URL.</summary>
+    internal static async Task<string> InstallAsync(string installRoot, Action<string> log, IProgress<double>? progress, HttpMessageHandler? handler, string releaseApi, CancellationToken cancellationToken)
     {
-        using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        using var http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
+        http.Timeout = Timeout.InfiniteTimeSpan;
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Protobuf-for-Visual-Studio", "0.1"));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
-        log($"Looking up the latest Buf CLI release ({LatestReleaseApi})");
-        using var release = JsonDocument.Parse(await http.GetStringAsync(LatestReleaseApi, cancellationToken).ConfigureAwait(false));
+        log($"Looking up the latest Buf CLI release ({releaseApi})");
+        using var release = JsonDocument.Parse(await http.GetStringAsync(releaseApi, cancellationToken).ConfigureAwait(false));
         var tag = release.RootElement.GetProperty("tag_name").GetString() ?? throw new InvalidOperationException("The release has no tag.");
         string? exeUrl = null;
         string? checksumUrl = null;
@@ -56,12 +61,7 @@ internal static class BufInstaller
         }
 
         var checksums = await http.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
-        var expected = checksums
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
-            .Where(parts => parts.Length == 2 && parts[1] == AssetName)
-            .Select(parts => parts[0].ToLowerInvariant())
-            .FirstOrDefault()
+        var expected = FindChecksum(checksums, AssetName)
             ?? throw new InvalidOperationException($"sha256.txt for {tag} has no entry for {AssetName}.");
 
         Directory.CreateDirectory(versionDir);
@@ -99,6 +99,14 @@ internal static class BufInstaller
         log($"Installed Buf {tag} to {exe}");
         return exe;
     }
+
+    /// <summary>Returns the lowercase SHA-256 for <paramref name="assetName"/> from a <c>sha256sum</c>-style listing.</summary>
+    internal static string? FindChecksum(string checksums, string assetName) => checksums
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        .Select(line => line.Trim().Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        .Where(parts => parts.Length == 2 && parts[1].TrimStart('*') == assetName)
+        .Select(parts => parts[0].ToLowerInvariant())
+        .FirstOrDefault();
 
     private static async Task DownloadAsync(HttpClient http, string url, string destination, IProgress<double>? progress, CancellationToken cancellationToken)
     {

@@ -29,6 +29,22 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # A real buf for the integration tests. Using the official action avoids the anonymous GitHub API rate limit
+      # that the extension's own installer would hit on shared runners; the installer is unit tested with a fake.
+      - uses: bufbuild/buf-action@v1
+        id: buf
+        with:
+          setup_only: true
+          github_token: ${{ github.token }}
+
+      - name: Unit tests
+        run: dotnet test --project tests/Protobuf.VisualStudio.Tests -c Release -- --filter-not-trait "Category=Integration"
+
+      - name: Integration tests (real buf CLI and language server)
+        env:
+          BUF_PATH: ${{ steps.buf.outputs.buf_path }}
+        run: dotnet test --project tests/Protobuf.VisualStudio.Tests -c Release --no-build -- --filter-trait "Category=Integration"
+
       - name: Work out the version
         id: version
         shell: pwsh

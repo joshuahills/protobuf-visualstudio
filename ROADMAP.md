@@ -37,6 +37,7 @@ for where each item comes from. IDs are stable so issues and commits can refer t
 | R-12 | **File icon** for `.proto` in Solution Explorer. |  |
 | R-13 | **New Item templates** | `.proto` file, `buf.yaml`, `buf.gen.yaml`. |
 | R-14 | **Minisign verification** of the downloaded CLI using `sha256.txt.minisig`. Version pinning option. |  |
-| R-15 | **Tests and CI** | Unit tests for `BufCli`, `WorkspaceRoots` and `BufInstaller`. GitHub Actions build that uploads the VSIX. |
+| R-15 | ~~Tests and CI~~ | **Done**: unit and integration tests run in CI before packaging. |
 | R-16 | **Marketplace publishing** | Icon, screenshots, listing text, `publishManifest.json`. |
 | R-17 | **Trusted Publishing (OIDC) for the Marketplace** | Replace the `VS_MARKETPLACE_PAT` secret with a Trusted Publishing policy for `.github/workflows/build.yml` and `VsixPublisher publish -oidc` (job needs `id-token: write`). Blocked until Microsoft.VSSDK.BuildTools 18.12.465+ reaches nuget.org (expected 2026-11-10) and microsoft/vsmarketplace#2310 (VsixPub0047) is fixed. Delete the PAT once an OIDC publish succeeds. |
+| R-18 | **In-IDE integration tests** | Start Visual Studio (experimental instance) with the VSIX on a CI runner, open the sample and check squiggles, completion and the Tools > Buf menu end to end. Needs a runner with VS 2026, which hosted runners do not have yet. |
