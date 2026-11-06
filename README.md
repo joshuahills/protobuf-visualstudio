@@ -112,7 +112,7 @@ MSBuild that ships with Visual Studio, because `dotnet build` refuses to deploy:
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\MSBuild.exe" `
   src\Protobuf.VisualStudio\Protobuf.VisualStudio.csproj -restore -p:DeployExtension=true -p:VSSDKTargetPlatformRegRootSuffix=Exp
-devenv /rootsuffix Exp samples\weather
+devenv /rootsuffix Exp samples\weather\Weather.slnx
 ```
 
 The first time after a command-line deploy, the experimental instance lists the extension as "Disabled by

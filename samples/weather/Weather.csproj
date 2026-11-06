@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An empty project so the sample opens as a solution (Weather.slnx), which is where the Solution Explorer
+    commands (Lint with Buf, Format with Buf, Lint Protos with Buf) appear. The .proto files show up as
+    plain items; nothing is compiled.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
