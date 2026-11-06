@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Protobuf.VisualStudio</RootNamespace>
     <AssemblyName>Protobuf.VisualStudio</AssemblyName>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <!-- The VS SDK pulls transitive packages with advisories we cannot change; audit only direct references. -->
     <NuGetAuditMode>direct</NuGetAuditMode>
     <!--
