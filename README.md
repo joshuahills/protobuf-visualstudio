@@ -118,6 +118,10 @@ devenv /rootsuffix Exp samples\weather\Weather.slnx
 The first time after a command-line deploy, the experimental instance lists the extension as "Disabled by
 user". Enable it in Extensions > Manage Extensions and restart the experimental instance.
 
+Debug builds install as "Protobuf Language Support (Dev)", with their own extension id, because a Marketplace
+copy installed for all users would otherwise be loaded in place of the deploy. If you have the Marketplace
+version installed, disable it in the experimental instance so the two don't both run.
+
 If the extension isn't listed at all, the experimental instance's extension cache is stale. Close the
 experimental instance, delete `ExtensionMetadata2.0.mpack` and `ExtensionMetadataCache.mpack` from
 `%LOCALAPPDATA%\Microsoft\VisualStudio\18.0_<instance>Exp\Extensions`, run
