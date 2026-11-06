@@ -6,7 +6,7 @@ namespace Protobuf.VisualStudio.Commands;
 /// <summary>Solution Explorer context menus (guidSHLMainMenu group IDs from the VS SDK's vsshlids.h).</summary>
 internal static class SolutionExplorerMenus
 {
-    private static readonly Guid ShellMainMenu = new("d309f791-903f-11d0-9efc-00a0c90f57e3");
+    private static readonly Guid ShellMainMenu = new("d309f791-903f-11d0-9efc-00a0c911004f");
 
     // Commands must sit in a group inside a menu: parented straight to a context menu (IDM_VS_CTXT_ITEMNODE etc.)
     // they are registered but never shown.
