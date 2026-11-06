@@ -18,6 +18,15 @@ internal static class RealBuf
     /// <summary>The repository's samples\weather folder.</summary>
     public static string WeatherSample { get; } = Path.Combine(RepoRoot(), "samples", "weather");
 
+    /// <summary>
+    /// The sample's source files as paths relative to it: everything but generated code, build output and the
+    /// .vs folder (which Visual Studio keeps locked while the sample solution is open).
+    /// </summary>
+    public static IEnumerable<string> WeatherSampleFiles() =>
+        Directory.EnumerateFiles(WeatherSample, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(WeatherSample, f))
+            .Where(r => r.Split(Path.DirectorySeparatorChar)[0].ToLowerInvariant() is not ("gen" or "bin" or "obj" or ".vs"));
+
     private static async Task<BufBinary> ResolveAsync()
     {
         var configured = Environment.GetEnvironmentVariable("BUF_PATH");
@@ -41,7 +50,7 @@ internal static class RealBuf
             ?? throw new InvalidOperationException($"'{path}' is not a working buf.exe.");
     }
 
-    private static string RepoRoot()
+    public static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {

@@ -96,15 +96,11 @@ public sealed class BreakingIntegrationTests : IDisposable
     private async Task<string> CreateRepoAsync(string repoRoot, string? workspaceSubdir)
     {
         var workspace = workspaceSubdir is null ? repoRoot : Path.Combine(repoRoot, workspaceSubdir);
-        foreach (var file in Directory.EnumerateFiles(RealBuf.WeatherSample, "*.*", SearchOption.AllDirectories))
+        foreach (var relative in RealBuf.WeatherSampleFiles())
         {
-            var relative = Path.GetRelativePath(RealBuf.WeatherSample, file);
-            if (!relative.StartsWith("gen", StringComparison.OrdinalIgnoreCase))
-            {
-                var destination = Path.Combine(workspace, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(file, destination);
-            }
+            var destination = Path.Combine(workspace, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(RealBuf.WeatherSample, relative), destination);
         }
 
         await GitAsync(repoRoot, "init", "--quiet", "-b", "main");

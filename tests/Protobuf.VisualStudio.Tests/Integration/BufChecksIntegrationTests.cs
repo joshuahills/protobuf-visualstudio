@@ -62,21 +62,15 @@ public sealed class BufChecksIntegrationTests : IDisposable
         return (result.ExitCode, BufAnnotation.ParseOutput(result, workspace));
     }
 
-    /// <summary>Copies samples\weather (without gen\) into a scratch folder and returns its path.</summary>
+    /// <summary>Copies samples\weather's source files into a scratch folder and returns its path.</summary>
     internal string CopySample()
     {
         var target = this.temp.Folder("weather");
-        foreach (var file in Directory.EnumerateFiles(RealBuf.WeatherSample, "*", SearchOption.AllDirectories))
+        foreach (var relative in RealBuf.WeatherSampleFiles())
         {
-            var relative = Path.GetRelativePath(RealBuf.WeatherSample, file);
-            if (relative.StartsWith("gen" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             var destination = Path.Combine(target, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination);
+            File.Copy(Path.Combine(RealBuf.WeatherSample, relative), destination);
         }
 
         return target;
