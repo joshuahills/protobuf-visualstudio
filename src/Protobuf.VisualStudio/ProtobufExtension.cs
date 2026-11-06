@@ -17,10 +17,20 @@ internal sealed class ProtobufExtension : Extension
     public override ExtensionConfiguration ExtensionConfiguration => new()
     {
         Metadata = new(
+#if DEBUG
+            // Local (Debug) builds get their own identity: an installed Marketplace copy (all users) would otherwise
+            // shadow the experimental-instance deploy, whatever its version. Disable the Marketplace copy in Exp.
+            id: "Protobuf.VisualStudio.Dev.4f6c2a9e-8d1b-4e57-9c3a-2b7e6f0d5a14",
+#else
             id: "Protobuf.VisualStudio.4f6c2a9e-8d1b-4e57-9c3a-2b7e6f0d5a14",
+#endif
             version: this.ExtensionAssemblyVersion,
             publisherName: "Josh Hills",
+#if DEBUG
+            displayName: "Protobuf Language Support (Dev)",
+#else
             displayName: "Protobuf Language Support",
+#endif
             description: "Protocol Buffers IntelliSense for Visual Studio, powered by the Buf language server: completion, go to definition, hover, references, rename, formatting, and build and lint diagnostics as you type.")
         {
             Tags = ["protobuf", "proto", "protocol buffers", "buf", "grpc", "lsp"],

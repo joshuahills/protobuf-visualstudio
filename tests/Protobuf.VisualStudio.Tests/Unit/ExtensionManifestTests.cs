@@ -30,12 +30,27 @@ public sealed class ExtensionManifestTests
         Assert.Contains(LegacyPlacements(), p => p.Control.EndsWith("." + command, StringComparison.Ordinal) && p.Guid == ShellMainMenu && p.Id == group);
     }
 
+    [Fact]
+    public void Only_Debug_builds_use_the_Dev_identity()
+    {
+        // Release builds are what goes to the Marketplace, so they must keep the published identity.
+        var manifest = File.ReadAllText(GeneratedFile("extension.vsixmanifest"));
+        var expected = Configuration == "Release"
+            ? "Id=\"Protobuf.VisualStudio.4f6c2a9e-8d1b-4e57-9c3a-2b7e6f0d5a14\""
+            : "Id=\"Protobuf.VisualStudio.Dev.4f6c2a9e-8d1b-4e57-9c3a-2b7e6f0d5a14\"";
+
+        Assert.Contains(expected, manifest, StringComparison.Ordinal);
+    }
+
+    // The test build always builds the extension too, with the same configuration.
+    private static string Configuration => new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+
+    private static string GeneratedFile(string name) =>
+        Path.Combine(RealBuf.RepoRoot(), "src", "Protobuf.VisualStudio", "obj", Configuration, "net10.0-windows", name);
+
     private static IEnumerable<(string Control, string Guid, int Id)> LegacyPlacements()
     {
-        // The test build always builds the extension too, with the same configuration.
-        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var manifest = Path.Combine(RealBuf.RepoRoot(), "src", "Protobuf.VisualStudio", "obj", configuration, "net10.0-windows", "extension.json");
-        using var json = JsonDocument.Parse(File.ReadAllText(manifest));
+        using var json = JsonDocument.Parse(File.ReadAllText(GeneratedFile("extension.json")));
 
         var results = new List<(string, string, int)>();
         Walk(json.RootElement, results);
