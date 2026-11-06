@@ -185,7 +185,20 @@ internal static partial class BufCli
             info.ArgumentList.Add(argument);
         }
 
+        AddDiffToPath(info, DiffTool.DirectoryToAdd);
         return info;
+    }
+
+    /// <summary>Appends <paramref name="diffDirectory"/> to the child's PATH (last, so the user's own tools win).</summary>
+    public static void AddDiffToPath(ProcessStartInfo info, string? diffDirectory)
+    {
+        if (string.IsNullOrEmpty(diffDirectory))
+        {
+            return;
+        }
+
+        var path = info.Environment.TryGetValue("PATH", out var existing) ? existing : null;
+        info.Environment["PATH"] = string.IsNullOrEmpty(path) ? diffDirectory : path.TrimEnd(Path.PathSeparator) + Path.PathSeparator + diffDirectory;
     }
 
     public static string FormatCommandLine(IEnumerable<string> arguments) =>

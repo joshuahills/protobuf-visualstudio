@@ -57,6 +57,29 @@ public sealed class ProtoFormatterIntegrationTests
     }
 
     [Fact]
+    public async Task Buf_format_works_without_a_diff_on_PATH()
+    {
+        // buf format execs "diff" internally; most Windows machines don't have one on PATH.
+        var buf = await RealBuf.GetAsync();
+        using var temp = new TempDirectory();
+        temp.File("buffer.proto", "syntax = \"proto3\";\nmessage   A {}\n");
+
+        var info = BufCli.CreateStartInfo(buf.Path, ["format", "buffer.proto"], temp.Path);
+        info.Environment["PATH"] = string.Empty;
+        var diff = DiffTool.FindDirectory(string.Empty, DiffTool.DefaultCandidates());
+        Assert.SkipWhen(diff is null, "No Git (for Windows or Visual Studio's) on this machine to borrow diff.exe from.");
+        BufCli.AddDiffToPath(info, diff);
+
+        using var process = System.Diagnostics.Process.Start(info)!;
+        var stdout = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderr = await process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(process.ExitCode == 0, stderr);
+        Assert.Contains("message A {}", await stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_sample_is_already_formatted()
     {
         var buf = await RealBuf.GetAsync();
